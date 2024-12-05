@@ -8,6 +8,7 @@ from hash_password import hash_existing_passwords
 import os
 import re
 from datetime import datetime
+from bst_cliente import ArbolClientes
 
    
 class CRUDWindow:
@@ -72,15 +73,35 @@ class CRUDWindow:
                 # Usar DateEntry con el estilo personalizado
                 entry = DateEntry(self.form_frame, date_pattern='y-mm-dd', style='my.DateEntry')
                 entry.grid(row=i, column=1, padx=5, pady=5, sticky='ew')
-            elif self.tabla == 'Pedidos' and col == 'Nombre_Pedido':
+            elif self.tabla == 'Pedido' and col == 'Nombre_Pedido':
                 # Usar Combobox para Nombre_Pedido en la tabla Pedidos
-                entry = ttk.Combobox(self.form_frame, values=["Pedidos Santiago", "Pedidos Starken"], state="")
+                entry = ttk.Combobox(self.form_frame, values=["Pedido Santiago", "Pedido Starken"], state="")
                 entry.grid(row=i, column=1, padx=5, pady=5, sticky='ew')
             else:
                 entry = ctk.CTkEntry(self.form_frame, width=200)
                 entry.grid(row=i, column=1, padx=5, pady=5, sticky='ew')
             self.form_entries[col] = entry
-    
+
+        if self.tabla == 'Pedido':
+            # Crear etiqueta para mostrar el cliente más frecuente
+            self.cliente_frecuente_label = ctk.CTkLabel(
+                self.master, 
+                text="El cliente más frecuente es: ", 
+                font=("Arial", 14),
+                text_color="black"
+            )
+            self.cliente_frecuente_label.pack(pady=10)
+
+            # Crear botón para calcular el cliente más frecuente
+            self.cliente_frecuente_button = ctk.CTkButton(
+                self.master,
+                text="Presionar Cliente Frecuente",
+                command=self.mostrar_cliente_frecuente_arbol,
+                width=200,
+                height=32
+            )
+            self.cliente_frecuente_button.pack(pady=5)
+        
         # Button frame
         self.button_frame = ctk.CTkFrame(self.master)
         self.button_frame.pack(pady=20, fill='x')
@@ -186,6 +207,35 @@ class CRUDWindow:
         # Leer y mostrar los registros de la tabla actual
         self.read_records()
         
+    def mostrar_cliente_frecuente_arbol(self):
+        try:
+            # Obtener todos los ID_Cliente de la tabla Pedido
+            self.c.execute("SELECT ID_Cliente FROM Pedido")
+            pedidos = self.c.fetchall()
+            
+            # Construir el árbol binario de clientes
+            arbol_clientes = ArbolClientes()
+            for pedido in pedidos:
+                id_cliente = pedido[0]
+                arbol_clientes.insertar(id_cliente)
+            
+            # Encontrar el cliente más frecuente
+            cliente_mas_frecuente, max_pedidos = arbol_clientes.encontrar_cliente_mas_frecuente()
+            if cliente_mas_frecuente:
+                # Obtener detalles del cliente más frecuente
+                self.c.execute("SELECT Nombre, Primer_Apellido FROM Clientes WHERE ID_Cliente = ?", (cliente_mas_frecuente,))
+                cliente_info = self.c.fetchone()
+                if cliente_info:
+                    nombre_completo = f"{cliente_info[0]} {cliente_info[1]}"
+                    mensaje = f"El cliente más frecuente es: {nombre_completo} (ID: {cliente_mas_frecuente})\nCantidad de pedidos: {max_pedidos}"
+                else:
+                    mensaje = f"El cliente más frecuente es: {cliente_mas_frecuente}\nCantidad de pedidos: {max_pedidos}"
+                self.cliente_frecuente_label.configure(text=mensaje)
+            else:
+                self.cliente_frecuente_label.configure(text="No hay pedidos registrados.")
+        except sqlite3.Error as e:
+            messagebox.showerror("Error", f"Error al obtener el cliente más frecuente: {e}", parent=self.master)    
+    
     def hash_passwords(self):
         try:
             hash_existing_passwords()
@@ -199,7 +249,7 @@ class CRUDWindow:
             self.conn.execute('BEGIN TRANSACTION;')
 
             # Insertar el nuevo pedido
-            query_pedido = "INSERT INTO pedidos (ID_Cliente, ID_Producto, cantidad, total, estado) VALUES (?, ?, ?, ?, 'Pendiente')"
+            query_pedido = "INSERT INTO pedido (ID_Cliente, ID_Producto, cantidad, total, estado) VALUES (?, ?, ?, ?, 'Pendiente')"
             self.c.execute(query_pedido, (id_cliente, id_producto, cantidad, total))
             
             # Actualizar el inventario
@@ -294,15 +344,8 @@ class CRUDWindow:
             if not re.match(r'^9\d{8}$', telefono):
                 return "Telefono debe ser un número válido de Chile con el formato +569********."
 
-        elif tabla == 'Pedidos':
-            # Desempaquetar los valores
-            id_pedido, id_cliente_producto = values
-
-            # Verificar unicidad de ID_Pedido
-            if not is_update:
-                self.c.execute("SELECT COUNT(*) FROM Pedidos WHERE ID_Pedido = ?", (id_pedido,))
-                if self.c.fetchone()[0] > 0:
-                    return "ID_Pedido ya existe en la base de datos."
+        elif tabla == 'Pedido':
+            pass    
 
         elif tabla == 'Productos':
             # Desempaquetar los valores
@@ -363,7 +406,7 @@ class CRUDWindow:
                 if self.c.fetchone()[0] > 0:
                     return "ID_Envios ya existe en la base de datos."
 
-        elif tabla == 'Categoria_Producto':
+        elif tabla == 'Categoria_Productos':
             # Desempaquetar los valores
             id_producto, id_categoria_producto, nombre_categoria = values
 
@@ -373,7 +416,7 @@ class CRUDWindow:
 
             # Validar ID_Categoria_Producto (entero)
             if not id_categoria_producto.isdigit():
-                return "ID_Categoria_Producto debe ser un número entero."
+                return "ID_Categoria_Productos debe ser un número entero."
 
             # Validar Nombre_Categoria (solo opciones válidas)
             if nombre_categoria not in ["Stickers", "Pendones", "Etiquetas"]:
@@ -388,22 +431,6 @@ class CRUDWindow:
                 self.c.execute("SELECT COUNT(*) FROM Cliente_Producto WHERE ID_Boleta_Cliente_Producto = ?", (id_boleta_cliente_producto,))
                 if self.c.fetchone()[0] > 0:
                     return "ID_Boleta_Cliente_Producto ya existe en la base de datos."
-
-        elif tabla == 'Comuna_Region':
-            # Desempaquetar los valores
-            id_comuna, id_region, nombre_comuna = values
-
-            # Validar ID_Comuna (entero)
-            if not id_comuna.isdigit():
-                return "ID_Comuna debe ser un número entero."
-
-            # Validar ID_Region (entero)
-            if not id_region.isdigit():
-                return "ID_Region debe ser un número entero."
-
-            # Validar Nombre_Comuna (solo letras)
-            if not re.match(r'^[a-zA-Z\s]+$', nombre_comuna):
-                return "Nombre_Comuna debe contener solo letras."
 
         elif tabla == 'Comunas':
             # Desempaquetar los valores
@@ -485,12 +512,15 @@ class CRUDWindow:
         for col in self.columns:
             widget = self.form_entries[col]
             if isinstance(widget, DateEntry):
-                # Obtener la fecha en formato de cadena
                 date_value = widget.get_date().strftime('%Y-%m-%d')
                 current_values.append(date_value)
             else:
                 current_values.append(widget.get())
+        
+        # Imprimir los valores a insertar para depuración
+        print("Valores a insertar en", self.tabla, ":", current_values)
     
+        # Validar los datos
         error = self.validar_datos(self.tabla, current_values)
         if error:
             messagebox.showerror("Error de Validación", error, parent=self.master)
@@ -504,8 +534,10 @@ class CRUDWindow:
             self.clear_entries()
             self.read_records()
         except sqlite3.Error as e:
-            messagebox.showerror("Error", f"Error al insertar el registro en {self.tabla}: {e}", parent=self.master)
-    
+            messagebox.showerror("Error de Base de Datos", f"Error al insertar el registro en {self.tabla}: {e}", parent=self.master)
+            # Imprimir el error para depuración
+            print("Error al insertar el registro:", e)
+            
     def update_record(self):
         current_values = []
         for col in self.columns:
@@ -558,9 +590,9 @@ class CRUDWindow:
     
         # Fetch customers ordered by purchase count
         self.c.execute("""
-            SELECT Clientes.*, COUNT(Pedidos.ID_Pedido) as purchase_count
+            SELECT Clientes.*, COUNT(Pedido.ID_Pedido) as purchase_count
             FROM Clientes
-            LEFT JOIN Pedidos ON Clientes.ID_Cliente = Pedidos.ID_Cliente
+            LEFT JOIN Pedido ON Clientes.ID_Cliente = Pedido.ID_Cliente
             GROUP BY Clientes.ID_Cliente
             ORDER BY purchase_count DESC
         """)
@@ -572,7 +604,7 @@ class CRUDWindow:
             customer_item = self.query_tree.insert('', 'end', text=customer_name, iid=customer_id)
     
             # Fetch and add customer's orders
-            self.c.execute("SELECT * FROM Pedidos WHERE ID_Cliente=?", (customer_id,))
+            self.c.execute("SELECT * FROM Pedido WHERE ID_Cliente=?", (customer_id,))
             orders = self.c.fetchall()
             for order in orders:
                 order_id = order[0]
@@ -613,9 +645,9 @@ class CRUDWindow:
     
         # Fetch customers ordered by purchase count
         self.c.execute("""
-            SELECT Clientes.*, COUNT(Pedidos.ID_Pedido) as purchase_count
+            SELECT Clientes.*, COUNT(Pedido.ID_Pedido) as purchase_count
             FROM Clientes
-            LEFT JOIN Pedidos ON Clientes.ID_Cliente = Pedidos.ID_Cliente
+            LEFT JOIN Pedido ON Clientes.ID_Cliente = Pedido.ID_Cliente
             GROUP BY Clientes.ID_Cliente
             ORDER BY purchase_count DESC
         """)
@@ -627,7 +659,7 @@ class CRUDWindow:
             customer_item = self.query_tree.insert('', 'end', text=customer_name, iid=customer_id)
     
             # Fetch and add customer's orders
-            self.c.execute("SELECT * FROM Pedidos WHERE ID_Cliente=?", (customer_id,))
+            self.c.execute("SELECT * FROM Pedido WHERE ID_Cliente=?", (customer_id,))
             orders = self.c.fetchall()
             for order in orders:
                 order_id = order[0]
@@ -647,7 +679,7 @@ class CRUDWindow:
         show_clients_cb = ctk.CTkCheckBox(self.options_frame, text="Mostrar Clientes", variable=self.show_clients_var, command=self.update_display)
         show_clients_cb.pack(pady=5)
 
-        show_orders_cb = ctk.CTkCheckBox(self.options_frame, text="Mostrar Pedidos", variable=self.show_orders_var, command=self.update_display)
+        show_orders_cb = ctk.CTkCheckBox(self.options_frame, text="Mostrar Pedido", variable=self.show_orders_var, command=self.update_display)
         show_orders_cb.pack(pady=5)
     
     

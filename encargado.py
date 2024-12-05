@@ -83,7 +83,7 @@ class EncargadoApp:
         # Crear botones individualmente y posicionarlos con .place()
         boton_categoria_producto = ctk.CTkButton(
             self.master,
-            text="Categoria_Producto",
+            text="Categoria_Productos",
             image=photo_categoria_producto,
             compound="left",
             command=self.mostrar_restriccion,
@@ -105,10 +105,10 @@ class EncargadoApp:
 
         boton_comuna_region = ctk.CTkButton(
             self.master,
-            text="Comuna_Region",
+            text="Region",
             image=photo_comuna_region,
             compound="left",
-            command=lambda: self.abrir_crud("Comuna_Region"),
+            command=lambda: self.abrir_crud("Region"),
             width=120,
             height=32
         )
@@ -160,10 +160,10 @@ class EncargadoApp:
 
         boton_pedidos = ctk.CTkButton(
             self.master,
-            text="Pedidos",
+            text="Pedido",
             image=photo_pedidos,
             compound="left",
-            command=lambda: self.abrir_crud("Pedidos"),
+            command=lambda: self.abrir_crud("Pedido"),
             width=120,
             height=32
         )
